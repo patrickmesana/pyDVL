@@ -62,6 +62,7 @@ def _permutation_montecarlo_shapley(
     algorithm_name: str = "permutation_montecarlo_shapley",
     progress: bool = False,
     job_id: int = 1,
+    seed: int = 42,
 ) -> ValuationResult:
     """Helper function for :func:`permutation_montecarlo_shapley`.
 
@@ -82,13 +83,13 @@ def _permutation_montecarlo_shapley(
     result = ValuationResult.zeros(
         algorithm=algorithm_name, indices=u.data.indices, data_names=u.data.data_names
     )
-
+    rng = np.random.default_rng(seed)
     pbar = tqdm(disable=not progress, position=job_id, total=100, unit="%")
     while not done(result):
         pbar.n = 100 * done.completion()
         pbar.refresh()
         prev_score = 0.0
-        permutation = np.random.permutation(u.data.indices)
+        permutation = rng.permutation(u.data.indices)
         permutation_done = False
         truncation.reset()
         for i, idx in enumerate(permutation):

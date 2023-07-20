@@ -164,6 +164,7 @@ def _permutation_montecarlo_one_step(
     u: Utility,
     truncation: TruncationPolicy,
     algorithm: str,
+    seed: int = 42,
 ) -> ValuationResult:
     # Avoid circular imports
     from .montecarlo import _permutation_montecarlo_shapley
@@ -173,6 +174,7 @@ def _permutation_montecarlo_one_step(
         done=MaxChecks(1),
         truncation=truncation,
         algorithm_name=algorithm,
+        seed=seed,
     )
     nans = np.isnan(result.values).sum()
     if nans > 0:
@@ -199,6 +201,7 @@ def truncated_montecarlo_shapley(
     n_jobs: int = 1,
     coordinator_update_period: int = 10,
     worker_update_period: int = 5,
+    seed: int = 42,
 ) -> ValuationResult:
     """Monte Carlo approximation to the Shapley value of data points.
 
@@ -250,17 +253,22 @@ def truncated_montecarlo_shapley(
     # including the ones that are running
     n_submitted_jobs = 2 * n_jobs
 
+    #create a seed for each job
+    rng = np.random.default_rng(seed)
+    job_seeds = [rng.integers(0, 2 ** 32 - 1) for _ in range(n_submitted_jobs)]
+
     accumulated_result = ValuationResult.zeros(algorithm=algorithm)
 
     with init_executor(max_workers=n_jobs, config=config) as executor:
         futures = set()
         # Initial batch of computations
-        for _ in range(n_submitted_jobs):
+        for i in range(n_submitted_jobs):
             future = executor.submit(
                 _permutation_montecarlo_one_step,
                 u,
                 truncation,
                 algorithm,
+                job_seeds[i],
             )
             futures.add(future)
         while futures:
@@ -277,12 +285,13 @@ def truncated_montecarlo_shapley(
             # Submit more computations
             # The goal is to always have `n_jobs`
             # computations running
-            for _ in range(n_submitted_jobs - len(futures)):
+            for j in range(n_submitted_jobs - len(futures)):
                 future = executor.submit(
                     _permutation_montecarlo_one_step,
                     u,
                     truncation,
                     algorithm,
+                    job_seeds[j],
                 )
                 futures.add(future)
     return accumulated_result
